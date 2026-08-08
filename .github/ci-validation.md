@@ -1,3 +1,3 @@
 # CampusX full-stack validation
 
-Validation iteration 2.
+Temporary validation marker.
