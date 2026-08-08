@@ -17,6 +17,6 @@
     "incremental": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "prisma.config.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
