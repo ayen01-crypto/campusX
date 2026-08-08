@@ -12,7 +12,11 @@ export class EngagementService {
 
   async book(userId: string, listingId: string, dto: CreateBookingDto) {
     const listing = await this.activeListing(listingId);
-    if (![ListingKind.TUTOR, ListingKind.SERVICE, ListingKind.RENTAL].includes(listing.kind)) {
+    if (
+      listing.kind !== ListingKind.TUTOR &&
+      listing.kind !== ListingKind.SERVICE &&
+      listing.kind !== ListingKind.RENTAL
+    ) {
       throw new BadRequestException('This listing does not support bookings');
     }
     if (listing.ownerId === userId) throw new BadRequestException('You cannot book your own listing');
