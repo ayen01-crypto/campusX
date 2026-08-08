@@ -5,7 +5,6 @@ build/
 coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
 .idea/
 .vscode/.ropeproject
 *.iml
@@ -13,3 +12,16 @@ pubspec.lock
 .env
 .env.*
 !.env.example
+
+# Node / API
+node_modules/
+api/node_modules/
+api/dist/
+api/.env
+api/src/generated/
+*.tsbuildinfo
+
+# Local infrastructure
+.minio/
+postgres-data/
+redis-data/
