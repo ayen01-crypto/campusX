@@ -188,7 +188,7 @@ class _SellScreenState extends ConsumerState<SellScreen> {
               onTap: publishing ? null : pickPhotos,
               borderRadius: BorderRadius.circular(22),
               child: Container(
-                minHeight: 150,
+                constraints: const BoxConstraints(minHeight: 150),
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
