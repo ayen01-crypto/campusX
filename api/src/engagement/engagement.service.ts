@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
-import { ListingKind, ListingStatus } from '../generated/prisma/enums.js';
+import { ListingKind, ListingStatus, NotificationType } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BuyTicketDto, CreateApplicationDto, CreateBookingDto } from './engagement.dto.js';
 
@@ -21,20 +21,33 @@ export class EngagementService {
     }
     if (listing.ownerId === userId) throw new BadRequestException('You cannot book your own listing');
 
-    return this.prisma.booking.create({
-      data: {
-        listingId,
-        requesterId: userId,
-        providerId: listing.ownerId,
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
-        note: dto.note?.trim(),
-        amount: listing.price,
-        currency: listing.currency,
-      },
-      include: {
-        listing: { select: { id: true, title: true, kind: true, images: true } },
-        provider: { select: { id: true, name: true, avatarUrl: true, verified: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.create({
+        data: {
+          listingId,
+          requesterId: userId,
+          providerId: listing.ownerId,
+          scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
+          note: dto.note?.trim(),
+          amount: listing.price,
+          currency: listing.currency,
+        },
+        include: {
+          listing: { select: { id: true, title: true, kind: true, images: true } },
+          provider: { select: { id: true, name: true, avatarUrl: true, verified: true } },
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: listing.ownerId,
+          type: NotificationType.BOOKING,
+          title: 'New booking request',
+          body: `A CampusX member requested ${listing.title}.`,
+          data: { bookingId: booking.id, listingId },
+        },
+      });
+      return booking;
     });
   }
 
@@ -50,14 +63,26 @@ export class EngagementService {
     });
     if (existing) throw new ConflictException('You have already applied to this internship');
 
-    return this.prisma.internshipApplication.create({
-      data: {
-        listingId,
-        userId,
-        coverNote: dto.coverNote?.trim(),
-        resumeUrl: dto.resumeUrl,
-      },
-      include: { listing: { select: { id: true, title: true, ownerId: true } } },
+    return this.prisma.$transaction(async (tx) => {
+      const application = await tx.internshipApplication.create({
+        data: {
+          listingId,
+          userId,
+          coverNote: dto.coverNote?.trim(),
+          resumeUrl: dto.resumeUrl,
+        },
+        include: { listing: { select: { id: true, title: true, ownerId: true } } },
+      });
+      await tx.notification.create({
+        data: {
+          userId: listing.ownerId,
+          type: NotificationType.APPLICATION,
+          title: 'New internship application',
+          body: `A student applied for ${listing.title}.`,
+          data: { applicationId: application.id, listingId },
+        },
+      });
+      return application;
     });
   }
 
@@ -69,39 +94,60 @@ export class EngagementService {
     const amount = (listing.price ?? 0) * quantity;
 
     if (amount === 0) {
-      const ticket = await this.prisma.eventTicket.create({
-        data: {
-          listingId,
-          userId,
-          quantity,
-          amount: 0,
-          currency: listing.currency,
-          reference: this.reference('TKT'),
-          qrToken: randomUUID(),
-        },
+      return this.prisma.$transaction(async (tx) => {
+        const ticket = await tx.eventTicket.create({
+          data: {
+            listingId,
+            userId,
+            quantity,
+            amount: 0,
+            currency: listing.currency,
+            reference: this.reference('TKT'),
+            qrToken: randomUUID(),
+          },
+        });
+        await tx.notification.create({
+          data: {
+            userId,
+            type: NotificationType.TICKET,
+            title: 'Your CampusX ticket is ready',
+            body: `Ticket confirmed for ${listing.title}.`,
+            data: { ticketId: ticket.id, listingId },
+          },
+        });
+        return { paymentRequired: false, ticket };
       });
-      return { paymentRequired: false, ticket };
     }
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId,
-        provider: 'UNCONFIGURED',
-        amount,
-        currency: listing.currency,
-        metadata: {
-          purpose: 'EVENT_TICKET',
-          listingId,
-          quantity,
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          userId,
+          provider: 'UNCONFIGURED',
+          amount,
+          currency: listing.currency,
+          metadata: {
+            purpose: 'EVENT_TICKET',
+            listingId,
+            quantity,
+          },
         },
-      },
+      });
+      await tx.notification.create({
+        data: {
+          userId,
+          type: NotificationType.PAYMENT,
+          title: 'Payment required for your ticket',
+          body: `Complete payment to issue your ticket for ${listing.title}.`,
+          data: { paymentId: payment.id, listingId },
+        },
+      });
+      return {
+        paymentRequired: true,
+        payment,
+        message: 'Choose a configured payment provider to complete this ticket purchase.',
+      };
     });
-
-    return {
-      paymentRequired: true,
-      payment,
-      message: 'Choose a configured payment provider to complete this ticket purchase.',
-    };
   }
 
   async claimDeal(userId: string, listingId: string) {
@@ -117,13 +163,25 @@ export class EngagementService {
       ? (listing.metadata as Record<string, unknown>).expiresAt
       : null;
 
-    return this.prisma.dealClaim.create({
-      data: {
-        listingId,
-        userId,
-        code: this.reference('DEAL'),
-        expiresAt: typeof expiry === 'string' ? new Date(expiry) : undefined,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.dealClaim.create({
+        data: {
+          listingId,
+          userId,
+          code: this.reference('DEAL'),
+          expiresAt: typeof expiry === 'string' ? new Date(expiry) : undefined,
+        },
+      });
+      await tx.notification.create({
+        data: {
+          userId,
+          type: NotificationType.DEAL,
+          title: 'Student deal claimed',
+          body: `${listing.title} is now saved to your CampusX claims.`,
+          data: { claimId: claim.id, listingId },
+        },
+      });
+      return claim;
     });
   }
 
