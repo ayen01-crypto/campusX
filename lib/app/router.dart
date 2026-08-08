@@ -20,7 +20,10 @@ GoRouter buildRouter() => GoRouter(
         GoRoute(path: '/interests', builder: (context, state) => const InterestsScreen()),
         GoRoute(path: '/app', builder: (context, state) => const MainShell()),
         GoRoute(path: '/saved', builder: (context, state) => const SavedScreen()),
-        GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
+        GoRoute(
+          path: '/notifications',
+          builder: (context, state) => const NotificationsScreen(),
+        ),
         GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
         GoRoute(
           path: '/catalog/:kind',
@@ -35,7 +38,10 @@ GoRouter buildRouter() => GoRouter(
         ),
         GoRoute(
           path: '/listing/:id',
-          builder: (context, state) => ListingDetailScreen(id: state.pathParameters['id']!),
+          builder: (context, state) => ListingDetailScreen(
+            id: state.pathParameters['id']!,
+            initialListing: state.extra is CampusListing ? state.extra! as CampusListing : null,
+          ),
         ),
         GoRoute(
           path: '/chat/:id',
