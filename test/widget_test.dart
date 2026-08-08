@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('CampusX boots into the splash experience', (tester) async {
+  testWidgets('CampusX splash routes a new user into onboarding', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [initialCampusStateProvider.overrideWithValue(CampusState.initial())],
@@ -15,5 +15,11 @@ void main() {
 
     expect(find.text('CampusX'), findsOneWidget);
     expect(find.text('Everything campus. One app.'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your campus.\nEverything. Connected.'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
   });
 }
