@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -38,6 +40,23 @@ class CampusApi {
 
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) {
     return _patch('/users/me', data);
+  }
+
+  Future<String> uploadFile(Uint8List bytes, String filename) async {
+    try {
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+      final response = await client.dio.post<dynamic>('/uploads', data: form);
+      final data = _normalize(response.data);
+      final url = data['url'] as String?;
+      if (url == null || url.isEmpty) {
+        throw const CampusApiException('CampusX did not receive a media URL after upload.');
+      }
+      return _absoluteMediaUrl(url);
+    } on DioException catch (error) {
+      throw CampusApiException.fromDio(error);
+    }
   }
 
   Future<List<CampusListing>> listings(
@@ -172,7 +191,9 @@ class CampusApi {
       (item) => item.name == rawKind,
       orElse: () => ListingKind.marketplace,
     );
-    final owner = map['owner'] is Map ? Map<String, dynamic>.from(map['owner'] as Map) : const <String, dynamic>{};
+    final owner = map['owner'] is Map
+        ? Map<String, dynamic>.from(map['owner'] as Map)
+        : const <String, dynamic>{};
     final university = map['university'] is Map
         ? Map<String, dynamic>.from(map['university'] as Map)
         : const <String, dynamic>{};
@@ -180,9 +201,16 @@ class CampusApi {
     final average = reviews.isEmpty
         ? 0.0
         : reviews
-                .map((review) => (Map<String, dynamic>.from(review as Map)['rating'] as num?)?.toDouble() ?? 0)
+                .map(
+                  (review) =>
+                      (Map<String, dynamic>.from(review as Map)['rating'] as num?)?.toDouble() ??
+                      0,
+                )
                 .fold<double>(0, (sum, value) => sum + value) /
             reviews.length;
+    final images = List<String>.from(map['images'] as List? ?? const [])
+        .map(_absoluteMediaUrl)
+        .toList();
 
     return CampusListing(
       id: map['id'] as String,
@@ -191,19 +219,25 @@ class CampusApi {
       subtitle: map['subtitle'] as String? ?? '',
       description: map['description'] as String? ?? '',
       emoji: kind.emoji,
-      location: map['location'] as String? ?? university['name'] as String? ?? 'Campus',
+      location: (map['location'] as String?) ?? (university['name'] as String?) ?? 'Campus',
       price: (map['price'] as num?)?.toInt(),
       rating: average,
       badge: owner['verified'] == true ? 'Verified' : null,
       owner: owner['name'] as String? ?? 'CampusX Member',
-      ownerId: owner['id'] as String? ?? map['ownerId'] as String?,
+      ownerId: (owner['id'] as String?) ?? (map['ownerId'] as String?),
       universityId: map['universityId'] as String?,
-      imageUrls: List<String>.from(map['images'] as List? ?? const []),
+      imageUrls: images,
       details: {
         if (university['name'] != null) 'University': '${university['name']}',
         if (map['currency'] != null) 'Currency': '${map['currency']}',
       },
     );
+  }
+
+  String _absoluteMediaUrl(String value) {
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('/')) return '${client.baseUrl}$value';
+    return '${client.baseUrl}/$value';
   }
 
   Future<Map<String, dynamic>> _get(String path, {Map<String, dynamic>? query}) async {
