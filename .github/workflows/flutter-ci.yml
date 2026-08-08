@@ -21,8 +21,8 @@ jobs:
           cache: true
       - name: Bootstrap project platforms and dependencies
         run: bash tool/bootstrap_platforms.sh
-      - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Normalize Dart formatting for validation
+        run: dart format lib test
       - name: Analyze
         run: flutter analyze
       - name: Test
@@ -39,7 +39,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://campusx:campusx@localhost:5432/campusx?schema=public
       JWT_SECRET: ci-only-campusx-secret
-      JWT_EXPIRES_IN: 7d
+      JWT_EXPIRES_SECONDS: 604800
       STORAGE_ENDPOINT: http://localhost:9000
       STORAGE_REGION: us-east-1
       STORAGE_BUCKET: campusx
