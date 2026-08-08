@@ -1,3 +1,3 @@
 # CampusX full-stack validation
 
-Ready for refreshed CI.
+CI marker.
