@@ -31,42 +31,49 @@ class CampusController extends Notifier<CampusState> {
     final next = Set<String>.of(state.savedIds);
     next.contains(id) ? next.remove(id) : next.add(id);
     state = state.copyWith(savedIds: next);
-    _persist();
+    unawaited(_persist());
+  }
+
+  void setSaved(String id, bool saved) {
+    final next = Set<String>.of(state.savedIds);
+    saved ? next.add(id) : next.remove(id);
+    state = state.copyWith(savedIds: next);
+    unawaited(_persist());
   }
 
   void setDarkMode(bool enabled) {
     state = state.copyWith(darkMode: enabled);
-    _persist();
+    unawaited(_persist());
   }
 
-  void setUniversity(String university) {
-    state = state.copyWith(university: university);
-    _persist();
+  void setUniversity(String university, {String? id}) {
+    state = state.copyWith(university: university, universityId: id);
+    unawaited(_persist());
   }
 
   void setInterests(Set<String> interests) {
     state = state.copyWith(interests: interests);
-    _persist();
+    unawaited(_persist());
   }
 
   void finishOnboarding() {
     state = state.copyWith(onboarded: true);
-    _persist();
+    unawaited(_persist());
   }
 
   void signOut() {
     state = state.copyWith(onboarded: false);
-    _persist();
+    unawaited(_persist());
   }
 
   void addListing(CampusListing listing) {
     state = state.copyWith(createdListings: [...state.createdListings, listing]);
-    _persist();
+    unawaited(_persist());
   }
 
-  Future<void> sendMessage(String conversationId, String text) async {
+  Future<ChatMessage?> queueMessage(String conversationId, String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty) return null;
 
     final message = ChatMessage(
       id: _uuid.v4(),
@@ -80,19 +87,54 @@ class CampusController extends Notifier<CampusState> {
     nextMessages.putIfAbsent(conversationId, () => <ChatMessage>[]).add(message);
     state = state.copyWith(messages: nextMessages);
     await _persist();
+    return message;
+  }
 
-    await Future<void>.delayed(const Duration(milliseconds: 850));
-    if (!ref.mounted) return;
-
-    final synced = _cloneMessages();
-    final thread = synced[conversationId];
+  Future<void> markMessageSynced(
+    String conversationId,
+    String localId,
+    ChatMessage serverMessage,
+  ) async {
+    final next = _cloneMessages();
+    final thread = next[conversationId];
     if (thread == null) return;
-    synced[conversationId] = thread
-        .map((item) => item.id == message.id ? item.copyWith(pending: false) : item)
+    next[conversationId] = thread
+        .map(
+          (message) => message.id == localId
+              ? ChatMessage(
+                  id: serverMessage.id,
+                  text: serverMessage.text,
+                  sentAt: serverMessage.sentAt,
+                  isMine: true,
+                  pending: false,
+                )
+              : message,
+        )
         .toList();
-    state = state.copyWith(messages: synced);
+    state = state.copyWith(messages: next);
     await _persist();
   }
+
+  Future<void> mergeRemoteMessages(
+    String conversationId,
+    List<ChatMessage> remoteMessages,
+  ) async {
+    final next = _cloneMessages();
+    final local = next[conversationId] ?? <ChatMessage>[];
+    final byId = <String, ChatMessage>{
+      for (final message in remoteMessages) message.id: message,
+      for (final message in local)
+        if (message.pending || !remoteMessages.any((remote) => remote.id == message.id))
+          message.id: message,
+    };
+    final merged = byId.values.toList()..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+    next[conversationId] = merged;
+    state = state.copyWith(messages: next);
+    await _persist();
+  }
+
+  List<ChatMessage> pendingMessages(String conversationId) =>
+      (state.messages[conversationId] ?? const []).where((message) => message.pending).toList();
 
   Map<String, List<ChatMessage>> _cloneMessages() => state.messages.map(
         (key, value) => MapEntry(key, List<ChatMessage>.of(value)),
