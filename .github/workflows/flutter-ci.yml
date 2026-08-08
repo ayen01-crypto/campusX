@@ -1,4 +1,4 @@
-name: Flutter CI
+name: CampusX CI
 
 on:
   push:
@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  flutter:
+    name: Flutter analyze test build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -20,11 +21,42 @@ jobs:
           cache: true
       - name: Bootstrap project platforms and dependencies
         run: bash tool/bootstrap_platforms.sh
-      - name: Format
-        run: dart format lib test
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
       - name: Analyze
         run: flutter analyze
       - name: Test
         run: flutter test
       - name: Build web
-        run: flutter build web
+        run: flutter build web --dart-define=API_BASE_URL=http://localhost:4000/v1
+
+  api:
+    name: NestJS Prisma build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    env:
+      DATABASE_URL: postgresql://campusx:campusx@localhost:5432/campusx?schema=public
+      JWT_SECRET: ci-only-campusx-secret
+      JWT_EXPIRES_IN: 7d
+      STORAGE_ENDPOINT: http://localhost:9000
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: campusx
+      STORAGE_ACCESS_KEY: campusx
+      STORAGE_SECRET_KEY: campusx-secret
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package.json
+      - name: Install dependencies
+        run: npm install
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Build API
+        run: npm run build
