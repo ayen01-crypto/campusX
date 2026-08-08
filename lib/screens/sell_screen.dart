@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -110,7 +110,9 @@ class _SellScreenState extends ConsumerState<SellScreen> {
         final url = await api.uploadFile(bytes, photo.name);
         imageUrls.add(url);
         if (mounted) {
-          setState(() => uploadProgress = (index + 1) / (photos.isEmpty ? 1 : photos.length));
+          setState(
+            () => uploadProgress = (index + 1) / (photos.isEmpty ? 1 : photos.length),
+          );
         }
       }
 
@@ -175,7 +177,9 @@ class _SellScreenState extends ConsumerState<SellScreen> {
           children: [
             Text(
               'Create a listing',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
             ),
             const SizedBox(height: 6),
             const Text('Post an item, room, service or opportunity for your campus community.'),
