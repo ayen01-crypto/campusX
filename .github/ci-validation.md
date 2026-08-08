@@ -1,3 +1,3 @@
 # CampusX full-stack validation
 
-CI marker.
+Current validation trigger.
