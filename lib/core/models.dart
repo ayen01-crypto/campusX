@@ -35,6 +35,8 @@ extension ListingKindX on ListingKind {
         ListingKind.deal => '🏷️',
       };
 
+  String get apiValue => name.toUpperCase();
+
   String get actionLabel => switch (this) {
         ListingKind.marketplace => 'Message seller',
         ListingKind.rental => 'Contact landlord',
@@ -61,6 +63,9 @@ class CampusListing {
     this.rating = 0,
     this.badge,
     this.owner = 'CampusX Member',
+    this.ownerId,
+    this.universityId,
+    this.imageUrls = const [],
     this.details = const {},
   });
 
@@ -75,6 +80,9 @@ class CampusListing {
   final double rating;
   final String? badge;
   final String owner;
+  final String? ownerId;
+  final String? universityId;
+  final List<String> imageUrls;
   final Map<String, String> details;
 
   Map<String, dynamic> toJson() => {
@@ -89,13 +97,16 @@ class CampusListing {
         'rating': rating,
         'badge': badge,
         'owner': owner,
+        'ownerId': ownerId,
+        'universityId': universityId,
+        'imageUrls': imageUrls,
         'details': details,
       };
 
   factory CampusListing.fromJson(Map<String, dynamic> json) {
     final kindName = json['kind'] as String? ?? ListingKind.marketplace.name;
     final kind = ListingKind.values.firstWhere(
-      (value) => value.name == kindName,
+      (value) => value.name == kindName.toLowerCase(),
       orElse: () => ListingKind.marketplace,
     );
     return CampusListing(
@@ -110,6 +121,9 @@ class CampusListing {
       rating: (json['rating'] as num?)?.toDouble() ?? 0,
       badge: json['badge'] as String?,
       owner: json['owner'] as String? ?? 'CampusX Member',
+      ownerId: json['ownerId'] as String?,
+      universityId: json['universityId'] as String?,
+      imageUrls: List<String>.from(json['imageUrls'] as List? ?? const []),
       details: Map<String, String>.from(json['details'] as Map? ?? const {}),
     );
   }
@@ -160,6 +174,7 @@ class CampusState {
     required this.darkMode,
     required this.onboarded,
     required this.university,
+    required this.universityId,
     required this.interests,
     required this.savedIds,
     required this.messages,
@@ -170,6 +185,7 @@ class CampusState {
         darkMode: false,
         onboarded: false,
         university: 'Kabale University',
+        universityId: null,
         interests: {},
         savedIds: {},
         messages: {},
@@ -179,6 +195,7 @@ class CampusState {
   final bool darkMode;
   final bool onboarded;
   final String university;
+  final String? universityId;
   final Set<String> interests;
   final Set<String> savedIds;
   final Map<String, List<ChatMessage>> messages;
@@ -188,6 +205,7 @@ class CampusState {
     bool? darkMode,
     bool? onboarded,
     String? university,
+    String? universityId,
     Set<String>? interests,
     Set<String>? savedIds,
     Map<String, List<ChatMessage>>? messages,
@@ -197,6 +215,7 @@ class CampusState {
       darkMode: darkMode ?? this.darkMode,
       onboarded: onboarded ?? this.onboarded,
       university: university ?? this.university,
+      universityId: universityId ?? this.universityId,
       interests: interests ?? this.interests,
       savedIds: savedIds ?? this.savedIds,
       messages: messages ?? this.messages,
@@ -208,6 +227,7 @@ class CampusState {
         'darkMode': darkMode,
         'onboarded': onboarded,
         'university': university,
+        'universityId': universityId,
         'interests': interests.toList(),
         'savedIds': savedIds.toList(),
         'messages': messages.map(
@@ -222,6 +242,7 @@ class CampusState {
       darkMode: json['darkMode'] as bool? ?? false,
       onboarded: json['onboarded'] as bool? ?? false,
       university: json['university'] as String? ?? 'Kabale University',
+      universityId: json['universityId'] as String?,
       interests: Set<String>.from(json['interests'] as List? ?? const []),
       savedIds: Set<String>.from(json['savedIds'] as List? ?? const []),
       messages: rawMessages.map(
