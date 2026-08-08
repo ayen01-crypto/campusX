@@ -1,0 +1,353 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserCapability {
+  STUDENT
+  SELLER
+  LANDLORD
+  TUTOR
+  SERVICE_PROVIDER
+  BUSINESS
+  EVENT_ORGANIZER
+  EMPLOYER
+  ADMIN
+}
+
+enum ListingKind {
+  MARKETPLACE
+  RENTAL
+  ROOMMATE
+  TUTOR
+  INTERNSHIP
+  EVENT
+  SERVICE
+  BUSINESS
+  DEAL
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  SOLD
+  FILLED
+  EXPIRED
+  REMOVED
+}
+
+enum ConversationType {
+  DIRECT
+  LISTING
+  SUPPORT
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DECLINED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+  REFUNDED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  SHORTLISTED
+  INTERVIEW
+  OFFERED
+  REJECTED
+  WITHDRAWN
+}
+
+enum NotificationType {
+  MESSAGE
+  LISTING
+  BOOKING
+  PAYMENT
+  TICKET
+  APPLICATION
+  DEAL
+  SYSTEM
+}
+
+model University {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  domain    String?   @unique
+  city      String
+  country   String    @default("Uganda")
+  latitude  Float?
+  longitude Float?
+  users     User[]
+  listings  Listing[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model User {
+  id              String                 @id @default(cuid())
+  email           String                 @unique
+  phone           String?                @unique
+  passwordHash    String
+  name            String
+  avatarUrl       String?
+  bio             String?
+  verified        Boolean                @default(false)
+  capabilities    UserCapability[]       @default([STUDENT])
+  universityId    String?
+  university      University?            @relation(fields: [universityId], references: [id], onDelete: SetNull)
+  listings        Listing[]
+  savedListings   SavedListing[]
+  memberships     ConversationMember[]
+  messages        Message[]
+  requested       Booking[]              @relation("BookingRequester")
+  provided        Booking[]              @relation("BookingProvider")
+  tickets         EventTicket[]
+  applications    InternshipApplication[]
+  reviewsWritten  Review[]               @relation("ReviewAuthor")
+  reviewsReceived Review[]               @relation("ReviewSubject")
+  notifications   Notification[]
+  payments        Payment[]
+  dealClaims      DealClaim[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([universityId])
+}
+
+model Listing {
+  id           String          @id @default(cuid())
+  kind         ListingKind
+  status       ListingStatus   @default(ACTIVE)
+  title        String
+  subtitle     String?
+  description  String
+  price        Int?
+  currency     String          @default("UGX")
+  location     String?
+  latitude     Float?
+  longitude    Float?
+  images       String[]        @default([])
+  tags         String[]        @default([])
+  metadata     Json?
+  featuredUntil DateTime?
+  ownerId      String
+  owner        User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  universityId String?
+  university   University?     @relation(fields: [universityId], references: [id], onDelete: SetNull)
+  savedBy      SavedListing[]
+  bookings     Booking[]
+  tickets      EventTicket[]
+  applications InternshipApplication[]
+  reviews      Review[]
+  dealClaims   DealClaim[]
+  conversations Conversation[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([kind, status])
+  @@index([universityId, kind, status])
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model SavedListing {
+  userId    String
+  listingId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, listingId])
+  @@index([listingId])
+}
+
+model Conversation {
+  id        String               @id @default(cuid())
+  type      ConversationType     @default(DIRECT)
+  listingId String?
+  listing   Listing?             @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  members   ConversationMember[]
+  messages  Message[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([listingId])
+}
+
+model ConversationMember {
+  conversationId String
+  userId         String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  clientId       String       @unique
+  conversationId String
+  senderId       String
+  body           String
+  attachmentUrl  String?
+  attachmentType String?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sentAt         DateTime     @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+
+  @@index([conversationId, sentAt])
+  @@index([senderId])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  listingId   String
+  requesterId String
+  providerId  String
+  status      BookingStatus @default(PENDING)
+  scheduledAt DateTime?
+  amount      Int?
+  currency    String        @default("UGX")
+  note        String?
+  listing     Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  requester   User          @relation("BookingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  provider    User          @relation("BookingProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([requesterId, status])
+  @@index([providerId, status])
+  @@index([listingId])
+}
+
+model EventTicket {
+  id          String       @id @default(cuid())
+  listingId   String
+  userId      String
+  reference   String       @unique
+  qrToken     String       @unique
+  status      TicketStatus @default(ACTIVE)
+  quantity    Int          @default(1)
+  amount      Int
+  currency    String       @default("UGX")
+  listing     Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+  purchasedAt DateTime     @default(now())
+  usedAt      DateTime?
+
+  @@index([userId, status])
+  @@index([listingId])
+}
+
+model InternshipApplication {
+  id          String            @id @default(cuid())
+  listingId   String
+  userId      String
+  status      ApplicationStatus @default(SUBMITTED)
+  coverNote   String?
+  resumeUrl   String?
+  listing     Listing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([listingId, userId])
+  @@index([userId, status])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  listingId String?
+  authorId  String
+  subjectId String
+  rating    Int
+  comment   String?
+  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  author    User     @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject   User     @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([subjectId, createdAt])
+  @@index([listingId])
+}
+
+model DealClaim {
+  id        String   @id @default(cuid())
+  listingId String
+  userId    String
+  code      String   @unique
+  redeemedAt DateTime?
+  expiresAt DateTime?
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([listingId, userId])
+  @@index([userId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  bookingId   String?
+  ticketId    String?
+  provider    String
+  providerRef String?       @unique
+  amount      Int
+  currency    String        @default("UGX")
+  status      PaymentStatus @default(PENDING)
+  metadata    Json?
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking     Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  ticket      EventTicket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@index([bookingId])
+  @@index([ticketId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
