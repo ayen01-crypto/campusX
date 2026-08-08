@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../core/app_state.dart';
 import '../core/auth_state.dart';
 import '../core/campus_api.dart';
+import '../core/chat_socket.dart';
 import '../core/theme.dart';
 import '../data/mock_data.dart';
 import '../widgets/common.dart';
@@ -23,20 +24,53 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final controller = TextEditingController();
   final scrollController = ScrollController();
+  ChatSocket? liveSocket;
   bool syncing = false;
+  bool liveConnected = false;
   String? syncError;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_syncConversation()));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_syncConversation());
+      unawaited(_connectLive());
+    });
   }
 
   @override
   void dispose() {
+    liveSocket?.dispose();
     controller.dispose();
     scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _connectLive() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    final socket = ChatSocket(ref.read(apiClientProvider));
+    liveSocket?.dispose();
+    liveSocket = socket;
+
+    await socket.connect(
+      conversationId: widget.conversationId,
+      currentUserId: user.id,
+      onConnectionChanged: (connected) {
+        if (mounted) setState(() => liveConnected = connected);
+      },
+      onMessage: (message) {
+        if (!mounted) return;
+        unawaited(
+          ref
+              .read(campusProvider.notifier)
+              .mergeRemoteMessages(widget.conversationId, [message]),
+        );
+        socket.markRead(widget.conversationId);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      },
+    );
   }
 
   Future<void> _syncConversation() async {
@@ -68,9 +102,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               .read(campusProvider.notifier)
               .markMessageSynced(widget.conversationId, message.id, synced);
         } catch (_) {
-          // Keep this message pending. A later sync can safely retry the same clientId.
+          // Keep this message pending. A later sync safely retries the same clientId.
         }
       }
+      liveSocket?.markRead(widget.conversationId);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (error) {
       if (mounted) setState(() => syncError = '$error');
     } finally {
@@ -86,6 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final localMessage =
         await ref.read(campusProvider.notifier).queueMessage(widget.conversationId, text);
     if (localMessage == null) return;
+    await _scrollToBottom();
 
     final user = ref.read(authProvider).user;
     if (user != null) {
@@ -104,7 +141,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         // Offline or server unavailable: the local pending copy remains queued.
       }
     }
+  }
 
+  Future<void> _scrollToBottom() async {
+    if (!mounted || !scrollController.hasClients) return;
+    await Future<void>.delayed(const Duration(milliseconds: 30));
     if (!mounted || !scrollController.hasClients) return;
     await scrollController.animateTo(
       scrollController.position.maxScrollExtent,
@@ -120,6 +161,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
     final name = conversationNames[widget.conversationId] ?? 'CampusX chat';
     final hasPending = messages.any((message) => message.pending);
+    final status = syncing
+        ? 'Syncing…'
+        : hasPending
+            ? 'Offline queue active'
+            : liveConnected
+                ? 'Live • Synced'
+                : 'Synced';
 
     return Scaffold(
       appBar: AppBar(
@@ -147,11 +195,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                   ),
                   Text(
-                    syncing
-                        ? 'Syncing…'
-                        : hasPending
-                            ? 'Offline queue active'
-                            : 'Synced',
+                    status,
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
                   ),
                 ],
@@ -162,7 +206,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           IconButton(
             tooltip: 'Sync messages',
-            onPressed: syncing ? null : _syncConversation,
+            onPressed: syncing
+                ? null
+                : () async {
+                    await _syncConversation();
+                    if (!liveConnected) await _connectLive();
+                  },
             icon: const Icon(Icons.sync_rounded),
           ),
         ],
