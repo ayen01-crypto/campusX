@@ -1,3 +1,3 @@
 # CampusX full-stack validation
 
-Temporary validation marker.
+This marker triggers the current validation branch while it is being synchronized with the latest production code.
