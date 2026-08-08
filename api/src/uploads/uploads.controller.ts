@@ -29,8 +29,13 @@ export class UploadsController {
     FileInterceptor('file', {
       limits: { fileSize: 10 * 1024 * 1024 },
       fileFilter: (_request, file, callback) => {
-        const allowed = /^(image\/(jpeg|png|webp|gif)|application\/pdf)$/.test(file.mimetype);
-        callback(allowed ? null : new BadRequestException('Only images and PDF files are allowed'), allowed);
+        const allowedMime = /^(image\/(jpeg|png|webp|gif)|application\/pdf)$/.test(file.mimetype);
+        const allowedExtension = /\.(jpg|jpeg|png|webp|gif|pdf)$/i.test(file.originalname);
+        const allowed = allowedMime || (file.mimetype === 'application/octet-stream' && allowedExtension);
+        callback(
+          allowed ? null : new BadRequestException('Only images and PDF files are allowed'),
+          allowed,
+        );
       },
     }),
   )
