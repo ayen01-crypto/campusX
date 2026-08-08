@@ -26,7 +26,7 @@ export class PaymentsService {
     });
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status === PaymentStatus.PAID) return payment;
-    if (![PaymentStatus.PENDING, PaymentStatus.FAILED].includes(payment.status)) {
+    if (payment.status !== PaymentStatus.PENDING && payment.status !== PaymentStatus.FAILED) {
       throw new BadRequestException(`Payment cannot be initiated from ${payment.status}`);
     }
 
@@ -42,7 +42,7 @@ export class PaymentsService {
           providerRef: `MOCK-${randomUUID()}`,
           status: PaymentStatus.PROCESSING,
           metadata: {
-            ...(this.objectMetadata(payment.metadata)),
+            ...this.objectMetadata(payment.metadata),
             phone: dto.phone,
           },
         },
@@ -78,7 +78,8 @@ export class PaymentsService {
       const metadata = this.objectMetadata(payment.metadata);
       if (metadata.purpose === 'EVENT_TICKET') {
         const listingId = typeof metadata.listingId === 'string' ? metadata.listingId : null;
-        const quantity = typeof metadata.quantity === 'number' ? Math.max(1, Math.floor(metadata.quantity)) : 1;
+        const quantity =
+            typeof metadata.quantity === 'number' ? Math.max(1, Math.floor(metadata.quantity)) : 1;
         if (!listingId) throw new BadRequestException('Payment is missing event metadata');
 
         const listing = await tx.listing.findUnique({ where: { id: listingId } });
