@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
-import { ConversationType } from '../generated/prisma/enums.js';
+import { ConversationType, NotificationType } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SendMessageDto, StartConversationDto } from './messaging.dto.js';
 
@@ -124,6 +124,23 @@ export class MessagingService {
         where: { id: conversationId },
         data: { updatedAt: new Date() },
       });
+
+      const recipients = await tx.conversationMember.findMany({
+        where: { conversationId, userId: { not: userId } },
+        select: { userId: true },
+      });
+      if (recipients.length > 0) {
+        await tx.notification.createMany({
+          data: recipients.map((recipient) => ({
+            userId: recipient.userId,
+            type: NotificationType.MESSAGE,
+            title: `New message from ${message.sender.name}`,
+            body: message.body.length > 120 ? `${message.body.slice(0, 117)}...` : message.body,
+            data: { conversationId, messageId: message.id },
+          })),
+        });
+      }
+
       return message;
     });
   }
