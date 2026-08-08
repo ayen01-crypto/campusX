@@ -1,3 +1,3 @@
 # CampusX full-stack validation
 
-Full-stack CI validation marker.
+Validation marker; branch is synchronized from main before the actual CI trigger.
