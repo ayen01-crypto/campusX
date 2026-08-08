@@ -10,13 +10,18 @@ import { AppModule } from './app.module.js';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { cors: false });
   const config = app.get(ConfigService);
+  const production = config.get<string>('NODE_ENV') === 'production';
+  const allowedOrigins = (config.get<string>('APP_ORIGIN') ?? 'http://localhost:3000')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   app.setGlobalPrefix('v1');
   app.use(helmet());
   app.enableCors({
-    origin: (config.get<string>('APP_ORIGIN') ?? 'http://localhost:3000')
-      .split(',')
-      .map((value) => value.trim()),
+    // Codespaces and local web previews use dynamic development origins.
+    // Production remains restricted to the explicit APP_ORIGIN allow-list.
+    origin: production ? allowedOrigins : true,
     credentials: true,
   });
   app.useGlobalPipes(
