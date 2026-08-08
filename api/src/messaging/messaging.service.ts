@@ -95,7 +95,7 @@ export class MessagingService {
     const hasMore = rows.length > limit;
     const data = hasMore ? rows.slice(0, limit) : rows;
     return {
-      data: data.reversed.toList(),
+      data: [...data].reverse(),
       nextCursor: hasMore ? data.at(-1)?.id ?? null : null,
     };
   }
