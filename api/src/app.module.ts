@@ -9,6 +9,7 @@ import { MessagingModule } from './messaging/messaging.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 import { UniversitiesModule } from './universities/universities.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module.js';
     NotificationsModule,
     PaymentsModule,
     UploadsModule,
+    ReviewsModule,
   ],
   controllers: [HealthController],
 })
